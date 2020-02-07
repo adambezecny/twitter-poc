@@ -41,3 +41,8 @@ https://developer.twitter.com/en/docs/accounts-and-users/subscribe-account-activ
 # twitter oauth
 
 https://developer.twitter.com/en/docs/basics/authentication/oauth-1-0a/obtaining-user-access-tokens
+
+# another example
+
+https://glitch.com/edit/#!/twitter-autohook-tutorial
+

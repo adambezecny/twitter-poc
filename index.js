@@ -47,11 +47,11 @@ const directMessageHandler = async (msg) => {
 
     try {
         console.log('marking as read')
-        await markAsRead(msg.id, recipientId) //by common sense senderId should be here but it does not work then
+        await markAsRead(msg.id, senderId)
         console.log('sending typing indicator...')
-        let response = await indicateTyping(recipientId)////by common sense senderId should be here but it does not work then
+        let response = await indicateTyping(senderId)
         console.log('typing indicator sent!')
-        // await delay(5000)
+        await delay(2000)
         console.log('responding with echo...')
         // response = await sendDirectMessageText(senderId, recipientId, 'echo: ' + message)
         response = await sendDirectMessageText2(senderId, recipientId, 'echo: ' + message)
@@ -201,10 +201,8 @@ const unregisterWebhook = async(expressApp, webhookId) => {
     console.log('twitter webhook unregistered')
 }
 
-// run only once when registering webhook!
-const registerWebhook = async (expressApp) => {
-    console.log('registering twitter webhook...')
-    const userActivityWebhook = twitterWebhooks.userActivity({
+const getUserActivityWebhook = (expressApp) => {
+    return twitterWebhooks.userActivity({
         serverUrl: process.env.TWITTER_WEBHOOK_URL,
         route: TWITTER_WEBHOOK_ROUTE,
         consumerKey: process.env.TWITTER_CONSUMER_KEY,
@@ -214,6 +212,12 @@ const registerWebhook = async (expressApp) => {
         environment: process.env.TWITTER_WEBHOOK_ENV,
         app: expressApp
     })
+}
+
+// run only once when registering webhook!
+const registerWebhook = async (expressApp) => {
+    console.log('registering twitter webhook...')
+    const userActivityWebhook = getUserActivityWebhook(expressApp)
 
     try {
 
@@ -234,38 +238,54 @@ const registerWebhook = async (expressApp) => {
             console.log(JSON.stringify(webhookInfo))
         }
 
-        console.log('checking subscription...')
-        const isSubscribed = await userActivityWebhook.isSubscribed({
-            userId: process.env.TWITTER_USER_ID,
-            accessToken: process.env.TWITTER_ACCESS_TOKEN,
-            accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET
-        })
-        console.log('isSubscribed ' + isSubscribed)
-        if (isSubscribed === false) {
-            console.log('subscribing to user activity...')
-            const userActivity = await userActivityWebhook.subscribe({
-                userId: process.env.TWITTER_USER_ID,
-                accessToken: process.env.TWITTER_ACCESS_TOKEN,
-                accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET
-            })
-
-            console.log('subscribed to user activity!')
-            console.log(userActivity)
-
-            console.log('registering direct messages handlers...')
-        
-            userActivity.on ('direct_message', directMessageHandler)
-    
-            console.log('direct_message handlers registered!')            
-
-        } else {
-            console.log('skipping subscription creation')
-        }
+        console.log('initiating webhook listener...')
+        initiateListener(expressApp, userActivityWebhook)
 
     } catch(err) {
         console.log('registerWebhook error')
         console.log(err)
     }
+}
+
+const initiateListener = async (expressApp, userActivityWebhook) => {
+    console.log('initiating webhook listener...')
+
+    console.log('checking subscription...')
+    const isSubscribed = await userActivityWebhook.isSubscribed({
+        userId: process.env.TWITTER_USER_ID,
+        accessToken: process.env.TWITTER_ACCESS_TOKEN,
+        accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET
+    })
+    console.log('isSubscribed ' + isSubscribed)
+    if (isSubscribed === false) {
+        const userActivity = await userActivityWebhook.subscribe({
+            userId: process.env.TWITTER_USER_ID,
+            accessToken: process.env.TWITTER_ACCESS_TOKEN,
+            accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET
+        })
+        console.log('subscribed to user activity!')
+        console.log('registering direct messages handlers...')
+        userActivity.on ('direct_message', directMessageHandler)
+        console.log('direct_message handlers registered!')                
+    } else {
+        console.log('recreating subscription')
+
+        await userActivityWebhook.unsubscribe({
+            userId: process.env.TWITTER_USER_ID,
+            accessToken: process.env.TWITTER_ACCESS_TOKEN,
+            accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET
+        })
+
+        const userActivity = await userActivityWebhook.subscribe({
+            userId: process.env.TWITTER_USER_ID,
+            accessToken: process.env.TWITTER_ACCESS_TOKEN,
+            accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET
+        })
+        console.log('subscribed to user activity!')
+        console.log('registering direct messages handlers...')
+        userActivity.on ('direct_message', directMessageHandler)
+        console.log('direct_message handlers registered!')                        
+    }    
 }
 
 const app = express()
@@ -291,4 +311,6 @@ app.get(TWITTER_WEBHOOK_ROUTE, (req, res) => {
 
 app.listen(port, () => console.log(`Twitter sample app listening on port ${port}!`))
 
-registerWebhook(app) // run only once when registering webhook!
+// registerWebhook(app) // run only once when registering webhook!
+// unregisterWebhook(app, '1225879995391889409')
+ initiateListener(app, getUserActivityWebhook(app))
